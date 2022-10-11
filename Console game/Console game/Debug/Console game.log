@@ -1,0 +1,5 @@
+﻿  Console game.cpp
+d:\cppfiles\projects\console game\console game\console game.cpp(75): warning C4018: <: несоответствие типов со знаком и без знака
+d:\cppfiles\projects\console game\console game\console game.cpp(117): warning C4018: <: несоответствие типов со знаком и без знака
+d:\cppfiles\projects\console game\console game\console game.cpp(181): warning C4244: аргумент: преобразование "time_t" в "unsigned int", возможна потеря данных
+  Console game.vcxproj -> D:\CppFiles\PROJECTS\Console game\Debug\Console game.exe
