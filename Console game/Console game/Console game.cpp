@@ -1,13 +1,19 @@
-﻿#include <iostream>
+#include <iostream>
 #include <string>
 #include <iomanip>
 #include <conio.h>
 #include <fstream>
 #include "consolecolors.h"
 #include <ctime>
+#include <signal.h>
 
-#define virusdamage 20
-#define bonusheal 10
+const int virusdamage = 20;
+const int bonusheal = 10;
+
+void handler(int sig)
+{
+	signal(SIGINT, handler);
+}
 
 int clamp(int a, int imin, int imax)
 {
@@ -30,6 +36,7 @@ object none = {' ', 0, 0}, player = {'P', 0, 14}, bonus = {'+', 0, 10}, virus = 
 int playerx = 2, playery = 2;
 int player_hp = 50;
 int score = 0;
+bool sprint = false;
 
 const int difficulty = 1; //отношение числа спавнящихся бонусов к числу спавнящихся вирусов
 
@@ -72,38 +79,60 @@ public:
 	void show()
 	{
 		fstream log_file("log.txt", ios::out | ios::app);
+		int x=0, y=0;
 		for (int i = 0; i < map.size(); i++)
 		{
-			if (map[i] == none.ch)
+			if (map[i] == player.ch)
 			{
-				SetColor(none.bg, none.t);
+				x = i % (this->width+1);
+				y = i / (this->width+1);
 			}
-			else if (map[i] == player.ch)
+		}
+		for (int i = y-10; i < y+10; i++)
+		{
+			for (int j = x-20; j < x+20; j++)
 			{
-				SetColor(player.bg, player.t);
+				if (((clamp(i, 0, height) != i) || (clamp(j, 0, width) != j) || (clamp(i * (width +1) + j, 0, (width + 1) * height) != i * (width+1) + j)))
+				{
+					cout << " ";
+				}
+				else
+				{
+					if (map[i * (width + 1) + j] == none.ch)
+					{
+						SetColor(none.bg, none.t);
+					}
+					else if (map[i * (width + 1) + j] == player.ch)
+					{
+						SetColor(player.bg, player.t);
+					}
+					else if (map[i * (width + 1) + j] == bonus.ch)
+					{
+						SetColor(bonus.bg, bonus.t);
+					}
+					else if (map[i * (width + 1) + j] == virus.ch)
+					{
+						SetColor(virus.bg, virus.t);
+					}
+					else if (map[i * (width + 1) + j] == wall.ch)
+					{
+						SetColor(wall.bg, wall.t);
+					}
+					else
+					{
+						log_file << "Error while showing map: unidentified character " << this->map[i * (width + 1) + j] << " on position " << i * (width + 1) + j << endl;
+						SetColor(0, 15);
+					}
+					if (map[i * (width + 1) + j] == '\n')
+					{
+
+					}
+					else
+						cout << map[i * (width + 1) + j];
+				}
 			}
-			else if (map[i] == bonus.ch)
-			{
-				SetColor(bonus.bg, bonus.t);
-			}
-			else if (map[i] == virus.ch)
-			{
-				SetColor(virus.bg, virus.t);
-			}
-			else if (map[i] == wall.ch)
-			{
-				SetColor(wall.bg, wall.t);
-			}
-			else if (map[i] == '\n')
-			{
-				SetColor(0, 15);
-			}
-			else
-			{
-				log_file << "Error while showing map: unidentified character " << this->map[i] << " on position " << i << endl;
-				SetColor(0, 15);
-			}
-			cout << map[i];
+			SetColor(0, 15);
+			cout << endl;
 		}
 		log_file.close();
 	}
@@ -133,6 +162,7 @@ void update_map(int dx, int dy, Map& map)
 	int newy = clamp(playery + dy, 0, map.height);
 	int newx = clamp(playerx + dx, 0, map.width);
 	int new_pos = newy * (map.width + 1) + newx;
+	int map_multiplier = (map.map.size() / 500) + 1;
 	bool passable = true;
 	fstream log_file("log.txt", ios::out | ios::app);
 	if (map.map[new_pos] == none.ch)
@@ -146,13 +176,13 @@ void update_map(int dx, int dy, Map& map)
 	{
 		player_hp += bonusheal;
 		score += bonusheal;
-		generate(1, '+', map);
-		generate(clamp(difficulty/2, 1, difficulty), 'D', map);
+		generate(map_multiplier, '+', map);
+		generate(clamp(difficulty/2, 1, difficulty) * map_multiplier, 'D', map);
 	}
 	else if (map.map[new_pos] == virus.ch)
 	{
 		player_hp -= virusdamage;
-		generate(difficulty, 'D', map);
+		generate(difficulty * map_multiplier, 'D', map);
 	}
 	else if (map.map[new_pos] == wall.ch)
 	{
@@ -176,25 +206,77 @@ void update_map(int dx, int dy, Map& map)
 	}
 }
 
+void pmove(int dir, int x, Map& map)
+{
+	switch (dir)
+	{
+	case 0:
+		for (int i = x - 1; i >= 0; i--)
+		{
+			update_map(0, -1, map);
+		}
+		break;
+	case 1:
+		for (int i = 0; i < x; i++)
+		{
+			update_map(1, 0, map);
+		}
+		break;
+	case 2:
+		for (int i = 0; i < x; i++)
+		{
+			update_map(0, 1, map);
+		}
+		break;
+	case 3:
+		for (int i = x - 1; i >= 0; i--)
+		{
+			update_map(-1, 0, map);
+		}
+		break;
+	}
+}
+
 int main()
 {
+	signal(SIGINT, handler);
 	srand(time(NULL));
 	fstream l("log.txt", ios::out | ios::trunc);
 	l.close();
 	string game_map_map = 
-"********************\n\
-* *   +            *\n\
-* P                *\n\
-*       *    *     *\n\
-*               D  *\n\
-*                  *\n\
-*  *          +    *\n\
-*                  *\n\
-*     +            *\n\
-*            *     *\n\
-*     *            *\n\
-********************\n";
-	Map game_map("game map", game_map_map, 20, 12);
+"****************************************\n\
+* *   +             *   +              *\n\
+* P                **       *    *     *\n\
+*       *    *       *       *    *    *\n\
+*               D  * *              D  *\n\
+*                  ***    D + *****    *\n\
+*  *          +               *   *    *\n\
+*                  ***        *** *    *\n\
+*     +                +               *\n\
+*            *    +         D D        *\n\
+*     *           *****           +D   *\n\
+* *   +             *   +              *\n\
+* D                **       *    *     *\n\
+*       *    *       *       *    *    *\n\
+*               D  * *              D  *\n\
+*                  ***    D + *****    *\n\
+*  *          +               *   *    *\n\
+*                  ***        *** *    *\n\
+*     +                +               *\n\
+*            *    +         D D        *\n\
+*     *           *****           +D   *\n\
+* *   +             *   +              *\n\
+* +                **       *   *      *\n\
+*       *    *       *      *    *     *\n\
+*               D  * *             D   *\n\
+*                  ***    D + *****    *\n\
+*  *          +               *   *    *\n\
+*                  ***        *** *    *\n\
+*     +                +               *\n\
+*            *    +         D D        *\n\
+*     *           *****            +D  *\n\
+****************************************\n";
+	Map game_map("game map", game_map_map, 40, 32);
 
 	bool exit = false;
 	while (!exit)
@@ -231,6 +313,10 @@ int main()
 		}
 		cout << " Score: " << setw(6) << score << endl;
 		SetColor(0, 15);
+		cout << "Sprint: ";
+		SetColor(0, (sprint) ? 10 : 12);
+		cout << ((sprint) ? "enabled" : "disabled");
+		SetColor(0, 15);
 		if (player_hp <= 0)
 		{
 			exit = true;
@@ -239,16 +325,23 @@ int main()
 		switch (_getch())
 		{
 		case 'w':
-			update_map(0, -1, game_map);
+			pmove(0, 1 + sprint * 2, game_map);
+			//update_map(0, -1 - sprint * 2, game_map);
 			break;
 		case 'a':
-			update_map(-1, 0, game_map);
+			pmove(3, 1 + sprint * 2, game_map);
+			//update_map(-1 - sprint * 2, 0, game_map);
 			break;
 		case 's':
-			update_map(0, 1, game_map);
+			pmove(2, 1 + sprint * 2, game_map);
+			//update_map(0, 1 + sprint * 2, game_map);
 			break;
 		case 'd':
-			update_map(1, 0, game_map);
+			pmove(1, 1 + sprint * 2, game_map);
+			//update_map(1 + sprint * 2, 0, game_map);
+			break;
+		case 'p':
+			sprint = !sprint;
 			break;
 		case 'q':
 			exit = true;
